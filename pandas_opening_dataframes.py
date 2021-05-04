@@ -21,13 +21,17 @@ for filename in filenames:
 dshs_texas_url = "https://dshs.texas.gov/coronavirus/CombinedHospitalDataoverTimebyTSA.xlsx"
 r = requests.get(dshs_texas_url)
 
-file=open("./dshs.xls", 'wb')
+file=open("./dshs.xlsx", 'wb')
 file.write(r.content)
 file.close()
 
-dataframes.append(pd.read_excel("./dshs.xls"))
+dataframes.append(pd.read_excel("./dshs.xlsx", header=2))
 
-#dataframes.append(pd.Dataframe(pd.read_excel(r)))
 print(dataframes[-1])
+# THIS IS NOT WORKINGGGGGG
 
 
+
+
+
+#
