@@ -33,7 +33,10 @@ try:
     cur.execute("DROP TABLE business_apps")
 except:
     pass
-
+try:
+    cur.execute("DROP TABLE county_deaths")
+except:
+    pass
 #######################
 ##### STATE LEVEL######
 #######################
@@ -108,26 +111,29 @@ confirmed_df = pd.read_csv(confirmed_url)
 confirmed_df = confirmed_df[confirmed_df.iso2 == "US"] # Drop rows of data outside of the US
 confirmed_df = confirmed_df.drop(columns=["UID", "iso2", "iso3", "FIPS", "code3", "Country_Region", "Lat", "Long_", "Combined_Key"]) # Drop columns that are unnecessary
 
-print(confirmed_df)
-
 # Death Cases - Github Data
 death_cases_url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv"
 death_cases_df = pd.read_csv(death_cases_url)
 
 death_cases_df = death_cases_df[death_cases_df.iso2 == "US"] # Drop rows of data outside of the US
-death_cases_df = death_cases_df.drop(columns=["UID", "iso3", "FIPS", "code3", "Country_Region", "Lat", "Long_", "Combined_Key"]) # Drop columns that are unnecessary
+death_cases_df = death_cases_df.drop(columns=["UID", "iso2", "iso3", "FIPS", "code3", "Country_Region", "Lat", "Long_", "Population", "Combined_Key"]) # Drop columns that are unnecessary
 
-print(death_cases_df)
+column_names_death = ["["+ str(col) + "]" for col in death_cases_df.columns] # Generate a the column declaration for the table
+column_declaration_death = "Admin2 text, Province_State text, " + " int, ".join(column_names_death[2:]) + " int"
+
+cur.execute("CREATE TABLE county_deaths (" + column_declaration_death + ")") # Create table
+death_cases_df.to_sql("county_deaths", con=con, if_exists="append", index=False) # Add the data to the table
+
+for row in cur.execute("SELECT * FROM county_deaths"):
+    pass
+    #print(row)
 
 # Unemployment Claims
 unemployment_url = "https://www.twc.texas.gov/files/agency/weekly-claims-by-county-twc.xlsx"
 unemployment_df = pd.read_excel(unemployment_url, header=2)
 
 unemployment_df = unemployment_df.iloc[:254, :]             # Eliminate unnecessary rows (that do not contain data)
-
 unemployment_df = unemployment_df.dropna(axis=1, how="all") # Drop any columns that are all NaN
-
-print(unemployment_df)
 
 column_names_dshs = ["["+ str(col) + "]" for col in unemployment_df.columns] # Generate a the column declaration for the table
 column_declaration = "County text, " + " int, ".join(column_names_dshs[1:]) + " int"
@@ -136,6 +142,6 @@ cur.execute("CREATE TABLE county_unemployment (" + column_declaration + ")") # C
 
 unemployment_df.to_sql("county_unemployment", con=con, if_exists="append", index=False) # Add the data to the table
 
-for row in cur.execute("SELECT [4/10/2021] FROM county_unemployment"):
+for row in cur.execute("SELECT * FROM county_unemployment"):
     pass
     #print(row)
