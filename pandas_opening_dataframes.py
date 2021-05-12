@@ -41,7 +41,9 @@ except:
 ##### STATE LEVEL######
 #######################
 
-# DSHS Hospital Capacity
+#------------------------#
+# DSHS Hospital Capacity #
+#------------------------#
 dshs_data_over_time_url = "https://dshs.texas.gov/coronavirus/CombinedHospitalDataoverTimebyTSA.xlsx"
 dshs_hospital_capacity_df = pd.read_excel(dshs_data_over_time_url, header=2, sheet_name="GA-32 COVID % Capacity")
 dshs_hospital_capacity_df = dshs_hospital_capacity_df.iloc[22:23, 2:]  # Eliminate unnecessary rows and columns (that do not contain data)
@@ -65,14 +67,17 @@ for date in dshs_hospital_capacity_df:
     #pass
     #print(row)
 
-# DSHS ICU bed utilization
+#--------------------------#
+# DSHS ICU bed utilization #
+#--------------------------#
+# Use the ICU beds available and Covid ICU beds DFs to calculate the ICU utilization
 dshs_icu_beds_avail_df = pd.read_excel(dshs_data_over_time_url, header=2, sheet_name="ICU Beds Available")
 dshs_icu_beds_avail_df = dshs_icu_beds_avail_df.iloc[22:23, 2:]  # Eliminate unnecessary rows and columns (that do not contain data)
 
 dshs_covid_icu_beds_df = pd.read_excel(dshs_data_over_time_url, header=2, sheet_name="COVID-19 ICU")
 dshs_covid_icu_beds_df = dshs_covid_icu_beds_df.iloc[22:23, 2:]  # Eliminate unnecessary rows and columns (that do not contain data)
 
-col_names_dshs = [str(col) for col in dshs_hospital_capacity_df.columns] # Generate a the column declaration for the table
+col_names_dshs = [str(col) for col in dshs_icu_beds_avail_df.columns] # Generate a the column declaration for the table
 
 dshs_icu_bed_utilization = dshs_covid_icu_beds_df.values/(dshs_covid_icu_beds_df.values + dshs_icu_beds_avail_df.values)
 dshs_icu_bed_utilization_df = pd.DataFrame(dshs_icu_bed_utilization, columns=col_names_dshs)
@@ -84,7 +89,9 @@ dshs_icu_bed_utilization_df.to_sql("texas_icu_utilization", con=con, if_exists="
     #pass
     #print(row)
 
-# Business applications 
+#-----------------------#
+# Business applications #
+#-----------------------#
 business_app_url = "https://www.census.gov/econ/bfs/csv/bfs_monthly.csv"
 business_app_df = pd.read_csv(business_app_url)
 
@@ -99,7 +106,7 @@ business_app_df = business_app_df[business_app_df.geo != "SO"]                  
 business_app_df = business_app_df[business_app_df.geo != "WE"]                   # Drop rows with no specified state
 
 business_column_declaration = "geo text, " + " numeric, ".join(business_app_df.columns[1:]) + " numeric"
-cur.execute("CREATE TABLE business_apps (" + business_column_declaration + ")") # Create table
+cur.execute("CREATE TABLE business_apps (" + business_column_declaration + ")")  # Create table
 
 business_app_df.to_sql("business_apps", con=con, if_exists="append", index=False) # Add the data to the table
 
@@ -111,14 +118,18 @@ business_app_df.to_sql("business_apps", con=con, if_exists="append", index=False
 ##### COUNTY LEVEL#####
 #######################
 
-# Confirmed Cases - Github Data
+#-------------------------------#
+# Confirmed Cases - Github Data #
+#-------------------------------#
 confirmed_url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"
 confirmed_df = pd.read_csv(confirmed_url)
 
 confirmed_df = confirmed_df[confirmed_df.iso2 == "US"] # Drop rows of data outside of the US
 confirmed_df = confirmed_df.drop(columns=["UID", "iso2", "iso3", "FIPS", "code3", "Country_Region", "Lat", "Long_", "Combined_Key"]) # Drop columns that are unnecessary
 
-# Death Cases - Github Data
+#---------------------------#
+# Death Cases - Github Data #
+#---------------------------#
 death_cases_url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv"
 death_cases_df = pd.read_csv(death_cases_url)
 
@@ -135,7 +146,9 @@ death_cases_df.to_sql("county_deaths", con=con, if_exists="append", index=False)
     #pass
     #print(row)
 
-# Unemployment Claims
+#---------------------#
+# Unemployment Claims #
+#---------------------#
 unemployment_url = "https://www.twc.texas.gov/files/agency/weekly-claims-by-county-twc.xlsx"
 unemployment_df = pd.read_excel(unemployment_url, header=2)
 
