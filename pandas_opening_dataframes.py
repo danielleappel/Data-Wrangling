@@ -35,6 +35,10 @@ try:
     cur.execute("DROP TABLE county_deaths")
 except:
     pass
+try:
+    cur.execute("DROP TABLE confirmed_by_county")
+except:
+    pass
 #######################
 ##### STATE LEVEL######
 #######################
@@ -112,9 +116,9 @@ business_app_df = business_app_df.fillna("NULL") # Replace NaN with Null
 
 cur.execute("CREATE TABLE texas_business_apps (Date TEXT, BusinessApps INTEGER)")  # Create table
 
-
 day = 1 # Enter all monthly data on the first of the corresponding month
 
+# Add entries to the table
 for i, row in business_app_df.iterrows():
     year = row[0]
     for month in range(1,12):
@@ -139,8 +143,23 @@ for i, row in business_app_df.iterrows():
 confirmed_url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"
 confirmed_df = pd.read_csv(confirmed_url)
 
-confirmed_df = confirmed_df[confirmed_df.iso2 == "US"] # Drop rows of data outside of the US
-confirmed_df = confirmed_df.drop(columns=["UID", "iso2", "iso3", "FIPS", "code3", "Country_Region", "Lat", "Long_", "Combined_Key"]) # Drop columns that are unnecessary
+confirmed_df = confirmed_df[confirmed_df.Province_State == "Texas"] # Drop rows of data outside of the US
+confirmed_df = confirmed_df.drop(columns=["UID", "Province_State", "iso2", "iso3", "FIPS", "code3", "Country_Region", "Lat", "Long_", "Combined_Key"]) # Drop columns that are unnecessary
+
+cur.execute("CREATE TABLE confirmed_by_county (County TEXT, Date TEXT, Confirmed INTEGER)")  # Create table
+
+# Add entries to the table
+for index, row in confirmed_df.iterrows():
+    clean_date = date(2020, 1, 22) # Data begins on January 22, 2020
+    county = row[0]
+
+    for col in range(1,len(row)):
+        confirmed = row[col]
+        cur.execute("INSERT INTO confirmed_by_county (County, Date, Confirmed) VALUES('{}', '{}', {})".format(county, clean_date, confirmed))
+
+#for row in cur.execute("SELECT * FROM confirmed_by_county"):
+    #pass
+    #print(row)
 
 #---------------------------#
 # Death Cases - Github Data #
@@ -148,15 +167,23 @@ confirmed_df = confirmed_df.drop(columns=["UID", "iso2", "iso3", "FIPS", "code3"
 death_cases_url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv"
 death_cases_df = pd.read_csv(death_cases_url)
 
-death_cases_df = death_cases_df[death_cases_df.iso2 == "US"] # Drop rows of data outside of the US
-death_cases_df = death_cases_df.drop(columns=["UID", "iso2", "iso3", "FIPS", "code3", "Country_Region", "Lat", "Long_", "Population", "Combined_Key"]) # Drop columns that are unnecessary
+death_cases_df = death_cases_df[death_cases_df.Province_State == "Texas"] # Drop rows of data outside of the US
+death_cases_df = death_cases_df.drop(columns=["UID", "Province_State", "iso2", "iso3", "FIPS", "code3", "Country_Region", "Lat", "Long_", "Population", "Combined_Key"]) # Drop columns that are unnecessary
 
-column_names_death = ["["+ str(col) + "]" for col in death_cases_df.columns] # Generate a the column declaration for the table
-column_declaration_death = "Admin2 text, Province_State text, " + " int, ".join(column_names_death[2:]) + " int"
+print(death_cases_df)
 
-cur.execute("CREATE TABLE county_deaths (" + column_declaration_death + ")") # Create table
+cur.execute("CREATE TABLE deaths_by_county (County TEXT, Date TEXT, Deaths INTEGER)")  # Create table
 
-#for row in cur.execute("SELECT * FROM county_deaths"):
+# Add entries to the table
+for index, row in death_cases_df.iterrows():
+    clean_date = date(2020, 1, 22) # Data begins on January 22, 2020
+    county = row[0]
+
+    for col in range(1,len(row)):
+        deaths = row[col]
+        cur.execute("INSERT INTO deaths_by_county (County, Date, Deaths) VALUES('{}', '{}', {})".format(county, clean_date, deaths))
+
+#for row in cur.execute("SELECT * FROM deaths_by_county"):
     #pass
     #print(row)
 
