@@ -44,18 +44,25 @@ except:
 # DSHS Hospital Capacity
 dshs_data_over_time_url = "https://dshs.texas.gov/coronavirus/CombinedHospitalDataoverTimebyTSA.xlsx"
 dshs_hospital_capacity_df = pd.read_excel(dshs_data_over_time_url, header=2, sheet_name="GA-32 COVID % Capacity")
-
 dshs_hospital_capacity_df = dshs_hospital_capacity_df.iloc[22:23, 2:]  # Eliminate unnecessary rows and columns (that do not contain data)
 
-column_names_dshs = ["["+ str(col) + "]" for col in dshs_hospital_capacity_df.columns] # Generate a the column declaration for the table
-dshs_column_declaration = " numeric, ".join(column_names_dshs) + " numeric"
+cur.execute("CREATE TABLE texas_capacity (Date text, CovidHospOutOfCapacity float)") # Create table
 
-cur.execute("CREATE TABLE texas_capacity (" + dshs_column_declaration + ")") # Create table
+clean_date = date(2020, 4, 11) # Data begins on April 11, 2020. 
+                               # Use this date to calculate clean date entries since several entries have errors
 
-dshs_hospital_capacity_df.to_sql("texas_capacity", con=con, if_exists="append", index=False) # Add the data to the table
+for date in dshs_hospital_capacity_df:
+    col = dshs_hospital_capacity_df[date].values # Get the column values
+    col = date, re.sub(r"[%|']", "", str(col))   # Strip the % and ' from entries
+    date, capac = col[0], col[1][1:-1]           # Strip the brackets arround capacity
+    
+    cur.execute("INSERT INTO texas_capacity (Date, CovidHospOutOfCapacity) VALUES('{}', {})".format(str(clean_date), str(capac)))
+                                                 # Add the entry to the table
 
-for row in cur.execute("SELECT * FROM texas_capacity"):
-    pass
+    clean_date = clean_date + timedelta(days=1)  # Icrement the date
+
+#for row in cur.execute("SELECT date(Date), CovidHospOutOfCapacity FROM texas_capacity"):
+    #pass
     #print(row)
 
 # DSHS ICU bed utilization
@@ -70,34 +77,34 @@ col_names_dshs = [str(col) for col in dshs_hospital_capacity_df.columns] # Gener
 dshs_icu_bed_utilization = dshs_covid_icu_beds_df.values/(dshs_covid_icu_beds_df.values + dshs_icu_beds_avail_df.values)
 dshs_icu_bed_utilization_df = pd.DataFrame(dshs_icu_bed_utilization, columns=col_names_dshs)
 
-cur.execute("CREATE TABLE texas_icu_utilization (" + dshs_column_declaration + ")") # Create table
+cur.execute("CREATE TABLE texas_icu_utilization (Date numeric, ICU_Utilization numeric)") # Create table
 dshs_icu_bed_utilization_df.to_sql("texas_icu_utilization", con=con, if_exists="append", index=False) # Add the data to the table
 
-for row in cur.execute("SELECT [2021-02-14] FROM texas_icu_utilization"):
-    pass
+#for row in cur.execute("SELECT [2021-02-14] FROM texas_icu_utilization"):
+    #pass
     #print(row)
 
 # Business applications 
 business_app_url = "https://www.census.gov/econ/bfs/csv/bfs_monthly.csv"
 business_app_df = pd.read_csv(business_app_url)
 
-business_app_df = business_app_df[business_app_df.series == "BA_BA" ] # Only consider business applications
-business_app_df = business_app_df[business_app_df.year >= 2020 ] # Only consider business applications since 2019
-business_app_df = business_app_df[business_app_df.sa != "A"]# Drop seasonally adjusted rows
+business_app_df = business_app_df[business_app_df.series == "BA_BA" ]            # Only consider business applications
+business_app_df = business_app_df[business_app_df.year >= 2020 ]                 # Only consider business applications since 2019
+business_app_df = business_app_df[business_app_df.sa != "A"]                     # Drop seasonally adjusted rows
 business_app_df = business_app_df.drop(columns=["sa", "naics_sector", "series"]) # Drop columns that are unnecessary
-business_app_df = business_app_df[business_app_df.geo != "US"] # Drop rows with no specified state
-business_app_df = business_app_df[business_app_df.geo != "NO"] # Drop rows with no specified state
-business_app_df = business_app_df[business_app_df.geo != "MW"] # Drop rows with no specified state
-business_app_df = business_app_df[business_app_df.geo != "SO"] # Drop rows with no specified state
-business_app_df = business_app_df[business_app_df.geo != "WE"] # Drop rows with no specified state
+business_app_df = business_app_df[business_app_df.geo != "US"]                   # Drop rows with no specified state
+business_app_df = business_app_df[business_app_df.geo != "NO"]                   # Drop rows with no specified state
+business_app_df = business_app_df[business_app_df.geo != "MW"]                   # Drop rows with no specified state
+business_app_df = business_app_df[business_app_df.geo != "SO"]                   # Drop rows with no specified state
+business_app_df = business_app_df[business_app_df.geo != "WE"]                   # Drop rows with no specified state
 
 business_column_declaration = "geo text, " + " numeric, ".join(business_app_df.columns[1:]) + " numeric"
 cur.execute("CREATE TABLE business_apps (" + business_column_declaration + ")") # Create table
 
 business_app_df.to_sql("business_apps", con=con, if_exists="append", index=False) # Add the data to the table
 
-for row in cur.execute("SELECT * FROM business_apps"):
-    pass
+#for row in cur.execute("SELECT * FROM business_apps"):
+    #pass
     #print(row)
 
 #######################
@@ -124,8 +131,8 @@ column_declaration_death = "Admin2 text, Province_State text, " + " int, ".join(
 cur.execute("CREATE TABLE county_deaths (" + column_declaration_death + ")") # Create table
 death_cases_df.to_sql("county_deaths", con=con, if_exists="append", index=False) # Add the data to the table
 
-for row in cur.execute("SELECT * FROM county_deaths"):
-    pass
+#for row in cur.execute("SELECT * FROM county_deaths"):
+    #pass
     #print(row)
 
 # Unemployment Claims
@@ -142,6 +149,6 @@ cur.execute("CREATE TABLE county_unemployment (" + column_declaration + ")") # C
 
 unemployment_df.to_sql("county_unemployment", con=con, if_exists="append", index=False) # Add the data to the table
 
-for row in cur.execute("SELECT * FROM county_unemployment"):
-    pass
+#for row in cur.execute("SELECT * FROM county_unemployment"):
+    #pass
     #print(row)
