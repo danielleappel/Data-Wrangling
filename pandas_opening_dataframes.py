@@ -150,12 +150,16 @@ cur.execute("CREATE TABLE confirmed_by_county (County TEXT, Date TEXT, Confirmed
 
 # Add entries to the table
 for index, row in confirmed_df.iterrows():
-    clean_date = datetime.date(2020, 1, 22) # Data begins on January 22, 2020
     county = row[0]
 
-    for col in range(1,len(row)):
-        confirmed = row[col]
-        cur.execute("INSERT INTO confirmed_by_county (County, Date, Confirmed) VALUES('{}', '{}', {})".format(county, clean_date, confirmed))
+    for i in range(1, len(row)):
+        d = confirmed_df.columns[i] # Grab the date for the current entry and clean it
+        d = datetime.datetime.strptime(d, r"%m/%d/%y")
+        d = d.date()
+
+        confirmed = row[i] # Grab the number of confirmed cases
+        
+        cur.execute("INSERT INTO confirmed_by_county (County, Date, Confirmed) VALUES('{}', '{}', {})".format(county, d, confirmed))
 
 #for row in cur.execute("SELECT * FROM confirmed_by_county"):
     #pass
@@ -174,12 +178,16 @@ cur.execute("CREATE TABLE deaths_by_county (County TEXT, Date TEXT, Deaths INTEG
 
 # Add entries to the table
 for index, row in death_cases_df.iterrows():
-    clean_date = datetime.date(2020, 1, 22) # Data begins on January 22, 2020
     county = row[0]
 
-    for col in range(1,len(row)):
-        deaths = row[col]
-        cur.execute("INSERT INTO deaths_by_county (County, Date, Deaths) VALUES('{}', '{}', {})".format(county, clean_date, deaths))
+    for i in range(1, len(row)):
+        d = death_cases_df.columns[i] # Grab the date for the current entry and clean it
+        d = datetime.datetime.strptime(d, r"%m/%d/%y")
+        d = d.date()
+
+        deaths = row[i] # Grab the number of deaths
+
+        cur.execute("INSERT INTO deaths_by_county (County, Date, Deaths) VALUES('{}', '{}', {})".format(county, d, deaths))
 
 #for row in cur.execute("SELECT * FROM deaths_by_county"):
     #pass
@@ -202,7 +210,7 @@ for index, row in unemployment_df.iterrows():
     county = row[0]
 
     for col in range(1,len(row)):
-        d = unemployment_df.columns[col]
+        d = unemployment_df.columns[col] # The date for the current entry
 
         # If the date is not a datetime object, make it one
         if not isinstance(d, datetime.datetime):
@@ -215,18 +223,19 @@ for index, row in unemployment_df.iterrows():
         if unemp_claims != "NULL":
             cur.execute("INSERT INTO unemployment_by_county (County, Date, UnemploymentClaims) VALUES('{}', '{}', {})".format(county, d, unemp_claims))
 
-
 #for row in cur.execute("SELECT * FROM unemployment_by_county"):
     #pass
     #print(row)
 
+#######################
+##### COUNTY TABLE#####
+#######################
 
+for row in cur.execute("""SELECT conf.County, conf.Date, conf.Confirmed, death.Deaths FROM confirmed_by_county conf
+                            INNER JOIN deaths_by_county death
+                                ON conf.Date=death.Date and conf.County=death.County
+                            INNER JOIN unemployment_by_county unemp
+                                ON conf.Date=unemp.Date and conf.County=unemp.County
+                            WHERE conf.County="Johnson" """):
+    print(row)
 
-
-
-
-
-
-#for row in cur.execute("SELECT * FROM county_unemployment"):
-    #pass
-    #print(row)
