@@ -58,7 +58,10 @@ dshs_data_over_time_url = "https://dshs.texas.gov/coronavirus/CombinedHospitalDa
 dshs_hospital_capacity_df = pd.read_excel(dshs_data_over_time_url, header=2, sheet_name="GA-32 COVID % Capacity")
 dshs_hospital_capacity_df = dshs_hospital_capacity_df.iloc[22:23, 2:]  # Eliminate unnecessary rows and columns (that do not contain data)
 
-cur.execute("CREATE TABLE texas_capacity (Date TEXT, CovidHospOutOfCapacity FLOAT)") # Create table
+cur.execute("""CREATE TABLE texas_capacity (
+                Date TEXT PRIMARY KEY, 
+                CovidHospOutOfCapacity FLOAT
+            )""") # Create table
 
 clean_date = datetime.date(2020, 4, 11) # Data begins on April 11, 2020. 
                                # Use this date to generate clean date entries since several have errors
@@ -86,11 +89,12 @@ dshs_icu_beds_avail_df = dshs_icu_beds_avail_df.iloc[22:23, 2:]  # Eliminate unn
 dshs_covid_icu_beds_df = pd.read_excel(dshs_data_over_time_url, header=2, sheet_name="COVID-19 ICU")
 dshs_covid_icu_beds_df = dshs_covid_icu_beds_df.iloc[22:23, 2:]  # Eliminate unnecessary rows and columns (that do not contain data)
 
-col_names_dshs = [str(col) for col in dshs_icu_beds_avail_df.columns] # Generate a the column declaration for the table
-
 dshs_icu_bed_utilization_df = dshs_covid_icu_beds_df/(dshs_covid_icu_beds_df + dshs_icu_beds_avail_df)
 
-cur.execute("CREATE TABLE texas_icu_utilization (Date TEXT, ICU_Utilization INTEGER)") # Create table
+cur.execute("""CREATE TABLE texas_icu_utilization (
+                Date TEXT, 
+                ICU_Utilization INTEGER
+            )""") # Create table
 
 clean_date = datetime.date(2020, 4, 11) # Data begins on April 11, 2020. 
                                # Use this date to generate clean date entries since several have errors
@@ -98,7 +102,8 @@ clean_date = datetime.date(2020, 4, 11) # Data begins on April 11, 2020.
 for i in dshs_icu_bed_utilization_df:
     col = dshs_icu_bed_utilization_df[i].values   # Get the column values
     utilization = re.sub("[\[|\]]", "", str(col)) # Strip the %, ', [, ] from capacity
-    cur.execute("INSERT INTO texas_icu_utilization (Date, ICU_Utilization) VALUES('{}', {})".format(clean_date, utilization))
+    cur.execute("""INSERT INTO texas_icu_utilization (Date, ICU_Utilization) 
+                   VALUES('{}', {})""".format(clean_date, utilization))
                                                   # Add the entry to the table
 
     clean_date = clean_date + datetime.timedelta(days=1)   # Icrement the date
@@ -122,7 +127,8 @@ business_app_df = business_app_df.drop(columns=["sa", "naics_sector", "series", 
 
 business_app_df = business_app_df.fillna("NULL") # Replace NaN with Null
 
-cur.execute("CREATE TABLE texas_business_apps (Date TEXT, BusinessApps INTEGER)")  # Create table
+cur.execute("""CREATE TABLE texas_business_apps (
+                Date TEXT, BusinessApps INTEGER)""")  # Create table
 
 day = 1 # Enter all monthly data on the first of the corresponding month
 
@@ -139,6 +145,25 @@ for i, row in business_app_df.iterrows():
 
 #for row in cur.execute("SELECT * FROM texas_business_apps"):
     #pass
+    #print(row)
+
+#######################
+##### STATE TABLE######
+#######################
+
+cur.execute("""CREATE TABLE state AS
+                SELECT
+                    capac.Date,
+                    capac.CovidHospOutOfCapacity,
+                    icu.ICU_Utilization,
+                    bus.BusinessApps
+                FROM
+                    texas_capacity capac
+                    LEFT JOIN texas_icu_utilization icu ON capac.Date = icu.Date
+                    LEFT JOIN texas_business_apps bus ON capac.Date = bus.Date
+                """)
+
+#for row in cur.execute("""SELECT * FROM state"""):
     #print(row)
 
 #######################
@@ -246,5 +271,5 @@ cur.execute("""CREATE TABLE county AS
                     LEFT JOIN unemployment_by_county unemp
                         ON conf.Date=unemp.Date and conf.County=unemp.County """)
 
-for row in cur.execute("""SELECT * FROM county WHERE County="Johnson" """):
-    print(row)
+#for row in cur.execute("""SELECT * FROM county WHERE County="Johnson" """):
+    #print(row)
