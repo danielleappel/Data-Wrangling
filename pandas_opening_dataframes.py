@@ -63,16 +63,16 @@ cur.execute("""CREATE TABLE texas_capacity (
                 CovidHospOutOfCapacity FLOAT
             )""") # Create table
 
-clean_date = datetime.date(2020, 4, 11) # Data begins on April 11, 2020. 
-                               # Use this date to generate clean date entries since several have errors
-
 for i in dshs_hospital_capacity_df:
-    col = dshs_hospital_capacity_df[i].values # Get the column values
-    capac = re.sub("[\%|\'|\[|\]]", "", str(col))    # Strip the %, ', [, ] from capacity
-    cur.execute("INSERT INTO texas_capacity (Date, CovidHospOutOfCapacity) VALUES('{}', {})".format(clean_date, capac))
-                                                 # Add the entry to the table
-
-    clean_date = clean_date + datetime.timedelta(days=1)  # Icrement the date
+    # Only add entries to the table with valid dates
+    try:
+        d = datetime.datetime.strptime(i, r"%Y-%m-%d").date() # Strip the date
+        col = dshs_hospital_capacity_df[i].values      # Get the column values
+        capac = re.sub("[\%|\'|\[|\]]", "", str(col))  # Strip the %, ', [, ] from capacity
+        cur.execute("INSERT INTO texas_capacity (Date, CovidHospOutOfCapacity) VALUES('{}', {})".format(d, capac))
+                                                       # Add the entry to the table
+    except:
+        pass
 
 #for row in cur.execute("SELECT Date, CovidHospOutOfCapacity FROM texas_capacity"):
     #pass
@@ -92,21 +92,21 @@ dshs_covid_icu_beds_df = dshs_covid_icu_beds_df.iloc[22:23, 2:]  # Eliminate unn
 dshs_icu_bed_utilization_df = dshs_covid_icu_beds_df/(dshs_covid_icu_beds_df + dshs_icu_beds_avail_df)
 
 cur.execute("""CREATE TABLE texas_icu_utilization (
-                Date TEXT, 
+                Date TEXT PRIMARY KEY, 
                 ICU_Utilization INTEGER
             )""") # Create table
 
-clean_date = datetime.date(2020, 4, 11) # Data begins on April 11, 2020. 
-                               # Use this date to generate clean date entries since several have errors
-
 for i in dshs_icu_bed_utilization_df:
-    col = dshs_icu_bed_utilization_df[i].values   # Get the column values
-    utilization = re.sub("[\[|\]]", "", str(col)) # Strip the %, ', [, ] from capacity
-    cur.execute("""INSERT INTO texas_icu_utilization (Date, ICU_Utilization) 
-                   VALUES('{}', {})""".format(clean_date, utilization))
-                                                  # Add the entry to the table
-
-    clean_date = clean_date + datetime.timedelta(days=1)   # Icrement the date
+    # Only add entries to the table with valid dates
+    try:
+        d = datetime.datetime.strptime(i, r"%Y-%m-%d").date() # Strip the date
+        col = dshs_icu_bed_utilization_df[i].values   # Get the column values
+        utilization = re.sub("[\[|\]]", "", str(col)) # Strip the %, ', [, ] from capacity
+        cur.execute("""INSERT INTO texas_icu_utilization (Date, ICU_Utilization) 
+                    VALUES('{}', {})""".format(d, utilization))
+                                                      # Add the entry to the table
+    except:
+        pass
 
 #for row in cur.execute("SELECT * FROM texas_icu_utilization"):
     #pass
@@ -128,9 +128,11 @@ business_app_df = business_app_df.drop(columns=["sa", "naics_sector", "series", 
 business_app_df = business_app_df.fillna("NULL") # Replace NaN with Null
 
 cur.execute("""CREATE TABLE texas_business_apps (
-                Date TEXT, BusinessApps INTEGER)""")  # Create table
+                Date TEXT PRIMARY KEY, 
+                BusinessApps INTEGER
+            )""")  # Create table
 
-day = 1 # Enter all monthly data on the first of the corresponding month
+day = 1 # Enter all monthly data on the 1st of the month
 
 # Add entries to the table
 for i, row in business_app_df.iterrows():
@@ -141,7 +143,8 @@ for i, row in business_app_df.iterrows():
 
         # Only add entries that are not null
         if apps != "NULL":
-            cur.execute("INSERT INTO texas_business_apps (Date, BusinessApps) VALUES('{}', {})".format(d, apps))
+            cur.execute("""INSERT INTO texas_business_apps (Date, BusinessApps) 
+                            VALUES('{}', {})""".format(d, apps))
 
 #for row in cur.execute("SELECT * FROM texas_business_apps"):
     #pass
@@ -179,7 +182,12 @@ confirmed_df = pd.read_csv(confirmed_url)
 confirmed_df = confirmed_df[confirmed_df.Province_State == "Texas"] # Drop rows of data outside of the US
 confirmed_df = confirmed_df.drop(columns=["UID", "Province_State", "iso2", "iso3", "FIPS", "code3", "Country_Region", "Lat", "Long_", "Combined_Key"]) # Drop columns that are unnecessary
 
-cur.execute("CREATE TABLE confirmed_by_county (County TEXT, Date TEXT, Confirmed INTEGER)")  # Create table
+cur.execute("""CREATE TABLE confirmed_by_county (
+                County TEXT, 
+                Date TEXT, 
+                Confirmed INTEGER,
+                PRIMARY KEY(County, Date)    
+            )""")  # Create table
 
 # Add entries to the table
 for index, row in confirmed_df.iterrows():
@@ -192,7 +200,8 @@ for index, row in confirmed_df.iterrows():
 
         confirmed = row[i] # Grab the number of confirmed cases
         
-        cur.execute("INSERT INTO confirmed_by_county (County, Date, Confirmed) VALUES('{}', '{}', {})".format(county, d, confirmed))
+        cur.execute("""INSERT INTO confirmed_by_county (County, Date, Confirmed) 
+                        VALUES('{}', '{}', {})""".format(county, d, confirmed))
 
 #for row in cur.execute("SELECT * FROM confirmed_by_county"):
     #pass
@@ -207,7 +216,12 @@ death_cases_df = pd.read_csv(death_cases_url)
 death_cases_df = death_cases_df[death_cases_df.Province_State == "Texas"] # Drop rows of data outside of the US
 death_cases_df = death_cases_df.drop(columns=["UID", "Province_State", "iso2", "iso3", "FIPS", "code3", "Country_Region", "Lat", "Long_", "Population", "Combined_Key"]) # Drop columns that are unnecessary
 
-cur.execute("CREATE TABLE deaths_by_county (County TEXT, Date TEXT, Deaths INTEGER)")  # Create table
+cur.execute("""CREATE TABLE deaths_by_county (
+                County TEXT, 
+                Date TEXT, 
+                Deaths INTEGER,
+                PRIMARY KEY(County, Date)
+            )""")  # Create table
 
 # Add entries to the table
 for index, row in death_cases_df.iterrows():
@@ -220,7 +234,8 @@ for index, row in death_cases_df.iterrows():
 
         deaths = row[i] # Grab the number of deaths
 
-        cur.execute("INSERT INTO deaths_by_county (County, Date, Deaths) VALUES('{}', '{}', {})".format(county, d, deaths))
+        cur.execute("""INSERT INTO deaths_by_county (County, Date, Deaths) 
+                        VALUES('{}', '{}', {})""".format(county, d, deaths))
 
 #for row in cur.execute("SELECT * FROM deaths_by_county"):
     #pass
@@ -236,7 +251,12 @@ unemployment_df = unemployment_df.iloc[:254, :]             # Eliminate unnecess
 unemployment_df = unemployment_df.dropna(axis=1, how="all") # Drop any columns that are all NaN
 unemployment_df = unemployment_df.fillna("NULL")            # And replace all NaN with Null
 
-cur.execute("CREATE TABLE unemployment_by_county (County TEXT, Date TEXT, UnemploymentClaims INTEGER)") # Create table
+cur.execute("""CREATE TABLE unemployment_by_county (
+                County TEXT, 
+                Date TEXT, 
+                UnemploymentClaims INTEGER,
+                PRIMARY KEY(County, Date) 
+            )""") # Create table
 
 # Add entries to the table
 for index, row in unemployment_df.iterrows():
@@ -254,7 +274,11 @@ for index, row in unemployment_df.iterrows():
 
         # Only add entries that are not null
         if unemp_claims != "NULL":
-            cur.execute("INSERT INTO unemployment_by_county (County, Date, UnemploymentClaims) VALUES('{}', '{}', {})".format(county, d, unemp_claims))
+            print("""INSERT INTO unemployment_by_county (County, Date, UnemploymentClaims) 
+                            VALUES('{}', '{}', {})""".format(county, d, unemp_claims))
+
+            cur.execute("""INSERT INTO unemployment_by_county (County, Date, UnemploymentClaims) 
+                            VALUES('{}', '{}', {})""".format(county, d, unemp_claims))
 
 #for row in cur.execute("SELECT * FROM unemployment_by_county"):
     #pass
