@@ -39,6 +39,14 @@ try:
     cur.execute("DROP TABLE confirmed_by_county")
 except:
     pass
+try:
+    cur.execute("DROP TABLE county")
+except:
+    pass
+try:
+    cur.execute("DROP TABLE state")
+except:
+    pass
 #######################
 ##### STATE LEVEL######
 #######################
@@ -231,11 +239,12 @@ for index, row in unemployment_df.iterrows():
 ##### COUNTY TABLE#####
 #######################
 
-for row in cur.execute("""SELECT conf.County, conf.Date, conf.Confirmed, death.Deaths FROM confirmed_by_county conf
-                            INNER JOIN deaths_by_county death
-                                ON conf.Date=death.Date and conf.County=death.County
-                            INNER JOIN unemployment_by_county unemp
-                                ON conf.Date=unemp.Date and conf.County=unemp.County
-                            WHERE conf.County="Johnson" """):
-    print(row)
+cur.execute("""CREATE TABLE county AS 
+                SELECT conf.County, conf.Date, conf.Confirmed, death.Deaths, unemp.UnemploymentClaims FROM confirmed_by_county conf
+                    LEFT JOIN deaths_by_county death
+                        ON conf.Date=death.Date and conf.County=death.County
+                    LEFT JOIN unemployment_by_county unemp
+                        ON conf.Date=unemp.Date and conf.County=unemp.County """)
 
+for row in cur.execute("""SELECT * FROM county WHERE County="Johnson" """):
+    print(row)
