@@ -12,7 +12,7 @@ try:
 except:
     pass
 try:
-    cur.execute("DROP TABLE county_unemployment")
+    cur.execute("DROP TABLE unemployment_by_county")
 except:
     pass
 try:
@@ -32,7 +32,7 @@ try:
 except:
     pass
 try:
-    cur.execute("DROP TABLE county_deaths")
+    cur.execute("DROP TABLE deaths_by_county")
 except:
     pass
 try:
@@ -92,18 +92,11 @@ for i in dshs_hospital_capacity_df:
         capac = dshs_hospital_capacity_df[i].values      # Get the column values
         capac = re.sub("[\%|\'|\[|\]]", "", str(capac))  # Strip the %, ', [, ] from capacity
 
-        cur.execute("SELECT DateID from dates where Date='{}' ".format(d)) # Query the dates table for the date id
-        rows = cur.fetchall()
-        date_id = rows[0][0]
-
         cur.execute("""INSERT INTO texas_capacity (DateID, CovidHospOutOfCapacity) 
-                        VALUES({}, {})""".format(date_id, capac))
-                                                         # Add the entry to the capacity table
+                        VALUES((SELECT DateID from dates where Date='{}'), {})""".format(d, capac))
+                                                         # Add the date and capac to the capacity table
     except:
         pass
-
-#for row in cur.execute("SELECT DateID, Date FROM dates"):
-    #print(row)
 
 #for row in cur.execute("SELECT * FROM texas_capacity"):
     #pass
@@ -144,12 +137,8 @@ for i in dshs_icu_bed_utilization_df:
         utilization = dshs_icu_bed_utilization_df[i].values   # Get the column values
         utilization = re.sub("[\[|\]]", "", str(utilization)) # Strip the %, ', [, ] from capacity
         
-        cur.execute("SELECT DateID from dates where Date='{}' ".format(d)) # Query the dates table for the date id
-        rows = cur.fetchall()
-        date_id = rows[0][0]
-        
         cur.execute("""INSERT INTO texas_icu_utilization (DateID, ICU_Utilization) 
-                    VALUES('{}', {})""".format(date_id, utilization))
+                    VALUES((SELECT DateID from dates where Date='{}'), {})""".format(d, utilization))
                                                       # Add the entry to the table
     except:
         pass
@@ -195,20 +184,12 @@ for i, row in business_app_df.iterrows():
         except:
             pass
 
-        apps = row[month]
-
-        cur.execute("SELECT DateID from dates where Date='{}' ".format(d)) # Query the dates table for the date id
-        rows = cur.fetchall()
-        date_id = rows[0][0]
+        apps = row[month] # Grab the number of business applications
 
         # Only add entries that are not null
         if apps != "NULL":
-            cur.execute("SELECT DateID from dates where Date='{}' ".format(d)) # Query the dates table for the date id
-            rows = cur.fetchall()
-            date_id = rows[0][0]
-
             cur.execute("""INSERT INTO texas_business_apps (DateID, BusinessApps) 
-                            VALUES('{}', {})""".format(date_id, apps))
+                            VALUES((SELECT DateID from dates where Date='{}'), {})""".format(d, apps))
 
 #for row in cur.execute("SELECT * FROM texas_business_apps"):
     #pass
@@ -226,7 +207,7 @@ cur.execute("""CREATE TABLE state AS
                     bus.BusinessApps
                 FROM
                     dates
-                    JOIN texas_capacity capac on dates.DateID = capac.DateID
+                    JOIN texas_capacity capac ON dates.DateID = capac.DateID
                     LEFT JOIN texas_icu_utilization icu ON capac.DateID = icu.DateID
                     LEFT JOIN texas_business_apps bus ON capac.DateID = bus.DateID
                 """)
@@ -246,12 +227,16 @@ confirmed_df = pd.read_csv(confirmed_url)
 
 confirmed_df = confirmed_df[confirmed_df.Province_State == "Texas"] # Drop rows of data outside of the US
 confirmed_df = confirmed_df.drop(columns=["UID", "Province_State", "iso2", "iso3", "FIPS", "code3", "Country_Region", "Lat", "Long_", "Combined_Key"]) # Drop columns that are unnecessary
+confirmed_df[confirmed_df.Admin2 != "Unassigned"] # Drop rows with unassigned counties
+confirmed_df[confirmed_df.Admin2 != "Out of TX"] # Drop rows with unassigned counties
 
 cur.execute("""CREATE TABLE confirmed_by_county (
                 County TEXT, 
-                Date TEXT, 
+                DateID INTEGER, 
                 Confirmed INTEGER,
-                PRIMARY KEY(County, Date)    
+                PRIMARY KEY(DateID, County)
+                FOREIGN KEY(DateID)
+                    REFERENCES dates(DateID)    
             )""")  # Create table
 
 # Add entries to the table
@@ -263,15 +248,22 @@ for index, row in confirmed_df.iterrows():
         d = datetime.datetime.strptime(d, r"%m/%d/%y")
         d = d.date()
 
+        # Add the first occurence of each date to the date table
+        try:
+            cur.execute("""INSERT INTO dates (Date)
+                            VALUES('{}')""".format(d))
+        except:
+            pass
+
         confirmed = row[i] # Grab the number of confirmed cases
-        
-        cur.execute("""INSERT INTO confirmed_by_county (County, Date, Confirmed) 
-                        VALUES('{}', '{}', {})""".format(county, d, confirmed))
+
+        cur.execute("""INSERT INTO confirmed_by_county (County, DateID, Confirmed) 
+                        VALUES('{}', (SELECT DateID from dates where Date='{}'), {})""".format(county, d, confirmed))
 
 #for row in cur.execute("SELECT * FROM confirmed_by_county"):
     #pass
     #print(row)
-
+    
 #---------------------------#
 # Death Cases - Github Data #
 #---------------------------#
@@ -280,13 +272,17 @@ death_cases_df = pd.read_csv(death_cases_url)
 
 death_cases_df = death_cases_df[death_cases_df.Province_State == "Texas"] # Drop rows of data outside of the US
 death_cases_df = death_cases_df.drop(columns=["UID", "Province_State", "iso2", "iso3", "FIPS", "code3", "Country_Region", "Lat", "Long_", "Population", "Combined_Key"]) # Drop columns that are unnecessary
+death_cases_df[death_cases_df.Admin2 != "Unassigned"] # Drop rows with unassigned counties
+death_cases_df[death_cases_df.Admin2 != "Out of TX"] # Drop rows with unassigned counties
 
 cur.execute("""CREATE TABLE deaths_by_county (
                 County TEXT, 
-                Date TEXT, 
+                DateID INTEGER, 
                 Deaths INTEGER,
-                PRIMARY KEY(County, Date)
-            )""")  # Create table
+                PRIMARY KEY(County, DateID)
+                FOREIGN KEY(DateID) 
+                    REFERENCES dates(DateID)
+            )""")  # Create deaths table
 
 # Add entries to the table
 for index, row in death_cases_df.iterrows():
@@ -297,10 +293,17 @@ for index, row in death_cases_df.iterrows():
         d = datetime.datetime.strptime(d, r"%m/%d/%y")
         d = d.date()
 
+        # Add the first occurence of each date to the date table
+        try:
+            cur.execute("""INSERT INTO dates (Date)
+                            VALUES('{}')""".format(d))
+        except:
+            pass
+
         deaths = row[i] # Grab the number of deaths
 
-        cur.execute("""INSERT INTO deaths_by_county (County, Date, Deaths) 
-                        VALUES('{}', '{}', {})""".format(county, d, deaths))
+        cur.execute("""INSERT INTO deaths_by_county (County, DateID, Deaths) 
+                        VALUES('{}', (SELECT DateID from dates where Date='{}'), {})""".format(county, d, deaths))
 
 #for row in cur.execute("SELECT * FROM deaths_by_county"):
     #pass
@@ -316,17 +319,28 @@ unemployment_df = unemployment_df.iloc[:254, :]             # Eliminate unnecess
 unemployment_df = unemployment_df.dropna(axis=1, how="all") # Drop any columns that are all NaN
 unemployment_df = unemployment_df.fillna("NULL")            # And replace all NaN with Null
 
+new_columns = []
+i = 0
+for col in unemployment_df.columns: # There is an error in the file - a 2019 date is marked as a 2020 date. Fix this
+    if i == 102:
+        new_columns.append(r"7/25/2019")
+    else:
+        new_columns.append(col)
+    i += 1
+unemployment_df.columns = new_columns
+    
 cur.execute("""CREATE TABLE unemployment_by_county (
                 County TEXT, 
-                Date TEXT, 
+                DateID INTEGER, 
                 UnemploymentClaims INTEGER,
-                PRIMARY KEY(County, Date) 
-            )""") # Create table
+                PRIMARY KEY(County, DateID) 
+                FOREIGN KEY(DateID)
+                    REFERENCES dates(DateID)
+            )""") # Create unemployment table
 
 # Add entries to the table
 for index, row in unemployment_df.iterrows():
     county = row[0]
-
     for col in range(1,len(row)):
         d = unemployment_df.columns[col] # The date for the current entry
 
@@ -335,15 +349,19 @@ for index, row in unemployment_df.iterrows():
             d = datetime.datetime.strptime(d, r"%m/%d/%Y")
         d = d.date()
 
-        unemp_claims = row[col]
+        # Add the first occurence of each date to the date table
+        try:
+            cur.execute("""INSERT INTO dates (Date)
+                            VALUES('{}')""".format(d))
+        except:
+            pass
 
+        unemp_claims = row[col]
+        
         # Only add entries that are not null
         if unemp_claims != "NULL":
-            #print("""INSERT INTO unemployment_by_county (County, Date, UnemploymentClaims) 
-                            #VALUES('{}', '{}', {})""".format(county, d, unemp_claims))
-
-            cur.execute("""INSERT INTO unemployment_by_county (County, Date, UnemploymentClaims) 
-                            VALUES('{}', '{}', {})""".format(county, d, unemp_claims))
+            cur.execute("""INSERT INTO unemployment_by_county (County, DateID, UnemploymentClaims) 
+                            VALUES('{}', (SELECT DateID from dates where Date='{}'), {})""".format(county, d, unemp_claims))
 
 #for row in cur.execute("SELECT * FROM unemployment_by_county"):
     #pass
@@ -354,11 +372,17 @@ for index, row in unemployment_df.iterrows():
 #######################
 
 cur.execute("""CREATE TABLE county AS 
-                SELECT conf.County, conf.Date, conf.Confirmed, death.Deaths, unemp.UnemploymentClaims FROM confirmed_by_county conf
-                    LEFT JOIN deaths_by_county death
-                        ON conf.Date=death.Date and conf.County=death.County
-                    LEFT JOIN unemployment_by_county unemp
-                        ON conf.Date=unemp.Date and conf.County=unemp.County """)
+                SELECT 
+                    conf.County, 
+                    dates.Date, 
+                    conf.Confirmed, 
+                    death.Deaths, 
+                    unemp.UnemploymentClaims 
+                FROM 
+                    dates
+                    JOIN confirmed_by_county conf ON dates.DateID = conf.DateID
+                    LEFT JOIN deaths_by_county death ON conf.DateID=death.DateID and conf.County=death.County
+                    LEFT JOIN unemployment_by_county unemp ON conf.DateID=unemp.DateID and conf.County=unemp.County""")
 
-#for row in cur.execute("""SELECT * FROM county WHERE County="Johnson" """):
-    #print(row)
+for row in cur.execute("""SELECT * FROM county"""):
+    print(row)
