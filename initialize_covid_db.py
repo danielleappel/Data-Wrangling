@@ -6,6 +6,7 @@ import math
 import time
 from reader import feed
 
+# Time the code from start to end
 tic = time.perf_counter()
 
 con = sqlite3.connect('covid.db')
@@ -13,7 +14,13 @@ cur = con.cursor()
 
 # Make sure all tables are dropped before initializing the database
 commands = []
-for row in cur.execute("SELECT 'DROP TABLE ' || name FROM sqlite_master WHERE type='table'"):
+for row in cur.execute("""SELECT
+                            'DROP TABLE ' || name
+                        FROM
+                            sqlite_master
+                        WHERE
+                            type = 'table'
+                        """):
     commands.append(row[0])
 
 for command in commands:
@@ -185,8 +192,8 @@ confirmed_df = pd.read_csv(confirmed_url)
 
 confirmed_df = confirmed_df[confirmed_df.Province_State == "Texas"] # Drop rows of data outside of the US
 confirmed_df = confirmed_df.drop(columns=["UID", "Province_State", "iso2", "iso3", "FIPS", "code3", "Country_Region", "Lat", "Long_", "Combined_Key"]) # Drop columns that are unnecessary
-confirmed_df[confirmed_df.Admin2 != "Unassigned"] # Drop rows with unassigned counties
-confirmed_df[confirmed_df.Admin2 != "Out of TX"] # Drop rows with unassigned counties
+confirmed_df = confirmed_df[confirmed_df.Admin2 != "Unassigned"] # Drop rows with unassigned counties
+confirmed_df = confirmed_df[confirmed_df.Admin2 != "Out of TX"] # Drop rows with unassigned counties
 
 cur.execute("""CREATE TABLE confirmed_by_county (
                 County TEXT, 
@@ -229,8 +236,8 @@ death_cases_df = pd.read_csv(death_cases_url)
 
 death_cases_df = death_cases_df[death_cases_df.Province_State == "Texas"] # Drop rows of data outside of the US
 death_cases_df = death_cases_df.drop(columns=["UID", "Province_State", "iso2", "iso3", "FIPS", "code3", "Country_Region", "Lat", "Long_", "Population", "Combined_Key"]) # Drop columns that are unnecessary
-death_cases_df[death_cases_df.Admin2 != "Unassigned"] # Drop rows with unassigned counties
-death_cases_df[death_cases_df.Admin2 != "Out of TX"] # Drop rows with unassigned counties
+death_cases_df = death_cases_df[death_cases_df.Admin2 != "Unassigned"] # Drop rows with unassigned counties
+death_cases_df = death_cases_df[death_cases_df.Admin2 != "Out of TX"] # Drop rows with unassigned counties
 
 cur.execute("""CREATE TABLE deaths_by_county (
                 County TEXT, 
@@ -336,5 +343,5 @@ con.commit()
 con.close()
 
 toc = time.perf_counter()
-print(f"Ran in {toc - tic:0.4f} seconds")
-# Usually runs in ~ 360 seconds/6 minutes 
+print(f"Initialized in {toc - tic:0.4f} seconds")
+# Usually runs in ~ 480 seconds/8 minutes 
