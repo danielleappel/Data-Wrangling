@@ -336,7 +336,8 @@ cur.execute("""CREATE TABLE county AS
                     dates
                     JOIN confirmed_by_county conf ON dates.DateID = conf.DateID
                     LEFT JOIN deaths_by_county death ON conf.DateID=death.DateID and conf.County=death.County
-                    LEFT JOIN unemployment_by_county unemp ON conf.DateID=unemp.DateID and conf.County=unemp.County""")
+                    LEFT JOIN unemployment_by_county unemp ON conf.DateID=unemp.DateID and conf.County=unemp.County
+            """)
 
 # Commit the changes and close the connection to the database
 con.commit()
