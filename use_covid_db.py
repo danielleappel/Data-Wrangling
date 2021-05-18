@@ -20,9 +20,9 @@ cur = con.cursor()
     #print(row)
 
 # Calculate the 7 day moving average ICU Utilization
-#for row in cur.execute("""SELECT *,
+#for row in cur.execute("""SELECT Date,
                             #AVG(ICU_Utilization) OVER(ORDER BY Date
-                                #ROWS BETWEEN 6 PRECEDING AND CURRENT ROW ) 
+                                #ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) 
                                 #as moving_average 
                             #FROM state
                         #"""):
