@@ -2,7 +2,6 @@ import pandas as pd
 import sqlite3
 import re
 import datetime
-import math
 import time
 from reader import feed
 
@@ -36,6 +35,8 @@ for command in commands:
 dshs_data_over_time_url = "https://dshs.texas.gov/coronavirus/CombinedHospitalDataoverTimebyTSA.xlsx"
 dshs_hospital_capacity_df = pd.read_excel(dshs_data_over_time_url, header=2, sheet_name="GA-32 COVID % Capacity")
 dshs_hospital_capacity_df = dshs_hospital_capacity_df.iloc[22:23, 2:]  # Eliminate unnecessary rows and columns (that do not contain data)
+
+#pd.melt(dshs_hospital_capacity_df, id_vars=['A'], value_vars=['B'])
 
 cur.execute("""CREATE TABLE texas_capacity (
                 Date DATE PRIMARY KEY, 
@@ -284,3 +285,10 @@ con.close()
 toc = time.perf_counter()
 print(f"Initialized in {toc - tic:0.4f} seconds")
 # Usually runs in ~ 36 seconds
+
+
+""" Fix list:
+        * Reshape dataframes to eliminate loops
+        * Create functions to call on each dataframe
+        * Create a seperate file with all of the hardcoded information
+"""
