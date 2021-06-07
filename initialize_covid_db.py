@@ -5,6 +5,21 @@ import datetime
 import time
 from reader import feed
 
+# Functions for use in the script
+def convert_to_sql_state_level(df, table_name, con, second_column_name):
+    # Reshape the df from wide -> long format
+    df = df.stack() # First stack the data
+    df = df.reset_index(level=0, drop=True)     # Then drop the row level (since they are irrelevant)
+
+    # Create the SQL table
+    df.to_sql(name=table_name, con=con)
+
+    # Change the default names of the columns
+    cur.execute("""ALTER TABLE {}
+                    RENAME COLUMN 'index' TO Date""".format(table_name))
+    cur.execute("""ALTER TABLE {}
+                    RENAME COLUMN '0' TO {}""".format(table_name, second_column_name))
+
 # Time the code from start to end
 tic = time.perf_counter()
 
@@ -32,31 +47,15 @@ for command in commands:
 #------------------------#
 # DSHS Hospital Capacity #
 #------------------------#
+
+# Form Texas capacity df 
 dshs_data_over_time_url = "https://dshs.texas.gov/coronavirus/CombinedHospitalDataoverTimebyTSA.xlsx"
 dshs_hospital_capacity_df = pd.read_excel(dshs_data_over_time_url, header=2, sheet_name="GA-32 COVID % Capacity")
 dshs_hospital_capacity_df = dshs_hospital_capacity_df.iloc[22:23, 2:]  # Eliminate unnecessary rows and columns (that do not contain data)
+dshs_hospital_capacity_df = dshs_hospital_capacity_df.replace({'%':''}, regex=True) # And strip the '%' from entries
 
-#pd.melt(dshs_hospital_capacity_df, id_vars=['A'], value_vars=['B'])
-
-cur.execute("""CREATE TABLE texas_capacity (
-                Date DATE PRIMARY KEY, 
-                CovidHospOutOfCapacity FLOAT
-            )""") # Create texas capacity table
-
-# Iterate through the columns (since this is a 1xn df)
-for i in dshs_hospital_capacity_df:
-    # Only add entries to the table with valid dates
-    try:
-        d = datetime.datetime.strptime(i, r"%Y-%m-%d").date() # Strip the date
-
-        capac = dshs_hospital_capacity_df[i].values      # Get the column values
-        capac = re.sub("[\%|\'|\[|\]]", "", str(capac))  # Strip the %, ', [, ] from capacity
-
-        cur.execute("""INSERT INTO texas_capacity (Date, CovidHospOutOfCapacity) 
-                        VALUES('{}', {})""".format(d, capac))
-                                                         # Add the date and capac to the capacity table
-    except:
-        pass
+# Add it to the sql database
+convert_to_sql_state_level(dshs_hospital_capacity_df, 'texas_capacity', con, 'CovidHospOutOfCapacity')
 
 print("Finished State Hospital Capacity Table Initialization")
 
@@ -73,24 +72,8 @@ dshs_covid_icu_beds_df = dshs_covid_icu_beds_df.iloc[22:23, 2:]  # Eliminate unn
 
 dshs_icu_bed_utilization_df = dshs_covid_icu_beds_df/(dshs_covid_icu_beds_df + dshs_icu_beds_avail_df)
 
-cur.execute("""CREATE TABLE texas_icu_utilization (
-                Date DATE PRIMARY KEY, 
-                ICU_Utilization INTEGER
-            )""") # Create table
-
-for i in dshs_icu_bed_utilization_df:
-    # Only add entries to the table with valid dates
-    try:
-        d = datetime.datetime.strptime(i, r"%Y-%m-%d").date() # Strip the date
-        
-        utilization = dshs_icu_bed_utilization_df[i].values   # Get the column values
-        utilization = re.sub("[\[|\]]", "", str(utilization)) # Strip the %, ', [, ] from capacity
-        
-        cur.execute("""INSERT INTO texas_icu_utilization (Date, ICU_Utilization) 
-                    VALUES('{}', {})""".format(d, utilization))
-                                                      # Add the entry to the table
-    except:
-        pass
+# Add it to the sql database
+convert_to_sql_state_level(dshs_icu_bed_utilization_df, 'texas_icu_utilization', con, 'ICU_Utilization')
 
 print("Finished State ICU Utilization Table Initialization")
 
@@ -108,6 +91,12 @@ business_app_df = business_app_df[business_app_df.geo == "TX"]         # Drop ro
 business_app_df = business_app_df.drop(columns=["sa", "naics_sector", "series", "geo"]) # Drop columns that are unnecessary
 
 business_app_df = business_app_df.fillna("NULL") # Replace NaN with Null
+
+# FIX ME to be part of the same function call for state
+
+#business_app_df = business_app_df.stack(level=1)
+#business_app_df = business_app_df.reset_index(level=1, drop=True)
+print(business_app_df)
 
 cur.execute("""CREATE TABLE texas_business_apps (
                 Date DATE PRIMARY KEY, 
@@ -291,4 +280,5 @@ print(f"Initialized in {toc - tic:0.4f} seconds")
         * Reshape dataframes to eliminate loops
         * Create functions to call on each dataframe
         * Create a seperate file with all of the hardcoded information
+        * Download files using requests
 """
