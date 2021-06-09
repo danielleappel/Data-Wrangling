@@ -158,7 +158,7 @@ business_app_df.dropna(axis=0) # Drop the rows with NaNs
 
 #cur.execute("""CREATE TABLE state AS
  #               SELECT
-  #                  capac.Date,
+  #                  date(capac.Date),
    #                 capac.CovidHospOutOfCapacity,
     #                icu.ICU_Utilization,
      #               bus.BusinessApps
@@ -226,7 +226,7 @@ print("Finished County Unemployment Claims Table Initialization")
 cur.execute("""CREATE TABLE county AS 
                 SELECT 
                     conf.County, 
-                    conf.Date, 
+                    date(conf.Date),
                     conf.Confirmed, 
                     death.Deaths, 
                     unemp.UnemploymentClaims 

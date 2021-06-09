@@ -9,8 +9,9 @@ cur = con.cursor()
 
 # Print county table
 for row in cur.execute("""SELECT * FROM county
-                            WHERE county in ('Bee', 'Bell')
-                            ORDER BY county"""):
+                            WHERE county in ('Bell', 'Bee')
+                            ORDER BY county
+                           """):
     print(row)
 
 # Calculate the 7 day non-overlapping average ICU Utilization
