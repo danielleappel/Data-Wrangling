@@ -6,19 +6,47 @@ import time
 from reader import feed
 
 # Functions for use in the script
-def convert_to_sql_state_level(df, table_name, con, second_column_name):
+def to_sql_state(df, table_name, con, var_col_name):
+    """ df - the dataframe
+        table_name - the name of the SQL table to write to
+        con - the name of the connection to the SQLite db
+        var_col_name - the specific name of data column holding the measurements
+    """
     # Reshape the df from wide -> long format
-    df = df.stack() # First stack the data
-    df = df.reset_index(level=0, drop=True)     # Then drop the row level (since they are irrelevant)
+    df = df.melt()                                  # First melt the data to reshape it
+    df['variable'] = pd.to_datetime(df['variable'], errors='ignore') # Next make sure dates are in the proper format  
 
     # Create the SQL table
-    df.to_sql(name=table_name, con=con)
+    df.to_sql(name=table_name, con=con, index=False)
 
     # Change the default names of the columns
     cur.execute("""ALTER TABLE {}
-                    RENAME COLUMN 'index' TO Date""".format(table_name))
+                    RENAME COLUMN 'variable' TO Date""".format(table_name))
     cur.execute("""ALTER TABLE {}
-                    RENAME COLUMN '0' TO {}""".format(table_name, second_column_name))
+                    RENAME COLUMN 'value' TO {}""".format(table_name, var_col_name))
+
+def to_sql_county(df, table_name, con, county_var, var_col_name):
+    """ df - the dataframe
+        table_name - the name of the SQL table to write to
+        con - the name of the connection to the SQLite db
+        id_var - the column that will be acting as the id
+        var_col_name - the specific name of data column holding the measurements
+    """
+    # Reshape the df from wide -> long format & clean the dates
+    df = df.melt(id_vars=county_var)                # First melt the data to reshape it
+    df['variable'] = pd.to_datetime(df['variable']) # Next make sure dates are in the proper format  
+
+    # Create the SQL table
+    df.to_sql(name=table_name, con=con, index=False)
+
+    # Change the default names of the columns
+    cur.execute("""ALTER TABLE {}
+                    RENAME COLUMN '{}' TO County""".format(table_name, county_var))
+    cur.execute("""ALTER TABLE {}
+                    RENAME COLUMN 'variable' TO Date""".format(table_name))
+    cur.execute("""ALTER TABLE {}
+                    RENAME COLUMN 'value' TO {}""".format(table_name, var_col_name))
+
 
 # Time the code from start to end
 tic = time.perf_counter()
@@ -55,7 +83,7 @@ dshs_hospital_capacity_df = dshs_hospital_capacity_df.iloc[22:23, 2:]  # Elimina
 dshs_hospital_capacity_df = dshs_hospital_capacity_df.replace({'%':''}, regex=True) # And strip the '%' from entries
 
 # Add it to the sql database
-convert_to_sql_state_level(dshs_hospital_capacity_df, 'texas_capacity', con, 'CovidHospOutOfCapacity')
+to_sql_state(dshs_hospital_capacity_df, 'texas_capacity', con, 'CovidHospOutOfCapacity')
 
 print("Finished State Hospital Capacity Table Initialization")
 
@@ -73,7 +101,7 @@ dshs_covid_icu_beds_df = dshs_covid_icu_beds_df.iloc[22:23, 2:]  # Eliminate unn
 dshs_icu_bed_utilization_df = dshs_covid_icu_beds_df/(dshs_covid_icu_beds_df + dshs_icu_beds_avail_df)
 
 # Add it to the sql database
-convert_to_sql_state_level(dshs_icu_bed_utilization_df, 'texas_icu_utilization', con, 'ICU_Utilization')
+to_sql_state(dshs_icu_bed_utilization_df, 'texas_icu_utilization', con, 'ICU_Utilization')
 
 print("Finished State ICU Utilization Table Initialization")
 
@@ -90,51 +118,55 @@ business_app_df = business_app_df[business_app_df.sa != "U"]           # Drop ro
 business_app_df = business_app_df[business_app_df.geo == "TX"]         # Drop rows for states other than Texas
 business_app_df = business_app_df.drop(columns=["sa", "naics_sector", "series", "geo"]) # Drop columns that are unnecessary
 
-business_app_df = business_app_df.fillna("NULL") # Replace NaN with Null
+#print(business_app_df)
+# Convert month abbreviations to numerical codes
+business_app_df = business_app_df.replace({'jan': '1'}, regex=True)
+#print(business_app_df)
 
 # FIX ME to be part of the same function call for state
 
-#business_app_df = business_app_df.stack(level=1)
-#business_app_df = business_app_df.reset_index(level=1, drop=True)
-print(business_app_df)
+business_app_df = business_app_df.stack() # Reshape the dataframe wide -> long
+business_app_df = business_app_df.reset_index(level=0, drop=True) # Drop the row numbers
+business_app_df.dropna(axis=0) # Drop the rows with NaNs
+#print(business_app_df)
 
-cur.execute("""CREATE TABLE texas_business_apps (
-                Date DATE PRIMARY KEY, 
-                BusinessApps INTEGER
-            )""")  # Create table
+#cur.execute("""CREATE TABLE texas_business_apps (
+                #Date DATE PRIMARY KEY, 
+                #BusinessApps INTEGER
+            #)""")  # Create table
 
 # Add business application entries to the table
-day = 1 # Enter all monthly data on the 1st of the month
-for i, row in business_app_df.iterrows():
-    year = row[0]
+#day = 1 # Enter all monthly data on the 1st of the month
+#for i, row in business_app_df.iterrows():
+#    year = row[0]
     # Loop through the date columns
-    for month in range(1,12):
-        d = datetime.date(year, month, day)
+    #for month in range(1,12):
+        #d = datetime.date(year, month, day)
 
-        apps = row[month] # Grab the number of business applications
+        #apps = row[month] # Grab the number of business applications
 
         # Add entries that are not null to the business apps table
-        if apps != "NULL":
-            cur.execute("""INSERT INTO texas_business_apps (Date, BusinessApps) 
-                            VALUES('{}', {})""".format(d, apps))
+        #if apps != "NULL":
+            #cur.execute("""INSERT INTO texas_business_apps (Date, BusinessApps) 
+             #               VALUES('{}', {})""".format(d, apps))
 
-print("Finished State Business Applications Table Initialization")
+#print("Finished State Business Applications Table Initialization")
 
 #######################
 ##### STATE TABLE######
 #######################
 
-cur.execute("""CREATE TABLE state AS
-                SELECT
-                    capac.Date,
-                    capac.CovidHospOutOfCapacity,
-                    icu.ICU_Utilization,
-                    bus.BusinessApps
-                FROM
-                    texas_capacity capac
-                    LEFT JOIN texas_icu_utilization icu ON capac.Date = icu.Date
-                    LEFT JOIN texas_business_apps bus ON capac.Date = bus.Date
-                """)
+#cur.execute("""CREATE TABLE state AS
+ #               SELECT
+  #                  capac.Date,
+   #                 capac.CovidHospOutOfCapacity,
+    #                icu.ICU_Utilization,
+     #               bus.BusinessApps
+      #          FROM
+       #             texas_capacity capac
+        #            LEFT JOIN texas_icu_utilization icu ON capac.Date = icu.Date
+         #           LEFT JOIN texas_business_apps bus ON capac.Date = bus.Date
+          #      """)
 
 #######################
 ##### COUNTY LEVEL#####
@@ -151,27 +183,8 @@ confirmed_df = confirmed_df.drop(columns=["UID", "Province_State", "iso2", "iso3
 confirmed_df = confirmed_df[confirmed_df.Admin2 != "Unassigned"] # Drop rows with unassigned counties
 confirmed_df = confirmed_df[confirmed_df.Admin2 != "Out of TX"] # Drop rows with unassigned counties
 
-cur.execute("""CREATE TABLE confirmed_by_county (
-                County TEXT, 
-                Date DATE, 
-                Confirmed INTEGER,
-                PRIMARY KEY(Date, County)  
-            )""")  # Create table
-
-# Add entries to the table
-for index, row in confirmed_df.iterrows():
-    county = row[0]
-
-    # Loop through the date columns
-    for i in range(1, len(row)):
-        d = confirmed_df.columns[i] # Grab the date for the current entry and clean it
-        d = datetime.datetime.strptime(d, r"%m/%d/%y")
-        d = d.date()
-
-        confirmed = row[i] # Grab the number of confirmed cases
-
-        cur.execute("""INSERT INTO confirmed_by_county (County, Date, Confirmed) 
-                        VALUES('{}', '{}', {})""".format(county, d, confirmed))
+# Add it to the sql database
+to_sql_county(confirmed_df, 'confirmed_by_county', con, 'Admin2', 'Confirmed')
 
 print("Finished County Confirmed Cases Table Initialization")
 
@@ -186,27 +199,8 @@ death_cases_df = death_cases_df.drop(columns=["UID", "Province_State", "iso2", "
 death_cases_df = death_cases_df[death_cases_df.Admin2 != "Unassigned"] # Drop rows with unassigned counties
 death_cases_df = death_cases_df[death_cases_df.Admin2 != "Out of TX"] # Drop rows with unassigned counties
 
-cur.execute("""CREATE TABLE deaths_by_county (
-                County TEXT, 
-                Date DATE, 
-                Deaths INTEGER,
-                PRIMARY KEY(County, Date)
-            )""")  # Create deaths table
-
-# Add entries to the table
-for index, row in death_cases_df.iterrows():
-    county = row[0]
-
-    # Loop through each date
-    for i in range(1, len(row)):
-        d = death_cases_df.columns[i] # Grab the date for the current entry and clean it
-        d = datetime.datetime.strptime(d, r"%m/%d/%y")
-        d = d.date()
-
-        deaths = row[i] # Grab the number of deaths
-
-        cur.execute("""INSERT INTO deaths_by_county (County, Date, Deaths) 
-                        VALUES('{}', '{}', {})""".format(county, d, deaths))
+# Add it to the sql database
+to_sql_county(death_cases_df, 'deaths_by_county', con, 'Admin2', 'Deaths')
 
 print("Finished County Deaths Table Initialization")
 
@@ -220,34 +214,9 @@ unemployment_df = unemployment_df.iloc[:254, :]             # Eliminate unnecess
 unemployment_df = unemployment_df.dropna(axis=1, how="all") # Drop any columns that are all NaN
 unemployment_df = unemployment_df.fillna("NULL")            # And replace all NaN with Null
 
-cur.execute("""CREATE TABLE unemployment_by_county (
-                County TEXT, 
-                Date DATE, 
-                UnemploymentClaims INTEGER,
-                PRIMARY KEY(County, Date) 
-            )""") # Create unemployment table
+# Add it to the sql database
+to_sql_county(unemployment_df, 'unemployment_by_county', con, 'County' , 'UnemploymentClaims')
 
-# Add entries to the table
-for index, row in unemployment_df.iterrows():
-    county = row[0]
-    for col in range(1,len(row)):
-        d = unemployment_df.columns[col] # The date for the current entry
-
-        # If the date is not a datetime object, make it one
-        if not isinstance(d, datetime.datetime):
-            d = datetime.datetime.strptime(d, r"%m/%d/%Y")
-        d = d.date()
-
-        unemp_claims = row[col]
-        
-        # Only add entries that are not null
-        if unemp_claims != "NULL":
-            # Try add the data for the date to the table (so long as it is not a repeat)
-            try:
-                cur.execute("""INSERT INTO unemployment_by_county (County, Date, UnemploymentClaims) 
-                                VALUES('{}', '{}', {})""".format(county, d, unemp_claims))
-            except:
-                pass
 print("Finished County Unemployment Claims Table Initialization")
 
 #######################

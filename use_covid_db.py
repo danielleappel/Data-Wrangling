@@ -8,8 +8,10 @@ cur = con.cursor()
     #print(row)
 
 # Print county table
-#for row in cur.execute("""SELECT * FROM county"""):
-    #print(row)
+for row in cur.execute("""SELECT * FROM county
+                            WHERE county in ('Bee', 'Bell')
+                            ORDER BY county"""):
+    print(row)
 
 # Calculate the 7 day non-overlapping average ICU Utilization
 #for row in cur.execute("""SELECT Date, strftime('%W', Date) WeekNumber, AVG(ICU_Utilization)
