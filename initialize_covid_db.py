@@ -6,15 +6,30 @@ import time
 from reader import feed
 
 # Functions for use in the script
-def to_sql_state(df, table_name, con, var_col_name):
+def to_sql_state(df, table_name, con, var_col_name, bus_apps=False):
     """ df - the dataframe
         table_name - the name of the SQL table to write to
         con - the name of the connection to the SQLite db
         var_col_name - the specific name of data column holding the measurements
     """
-    # Reshape the df from wide -> long format
-    df = df.melt()                                  # First melt the data to reshape it
-    df['variable'] = pd.to_datetime(df['variable'], errors='ignore') # Next make sure dates are in the proper format  
+    # If we have the business application data, we need to generate the list of dates
+    if bus_apps:
+        # Figure out how many years are stored in the dataframe
+        num_years = df.shape[0]
+
+        df = df.melt()
+
+        # Update month labels to be the date of the first of each month
+        dates = generate_1st_of_the_month(2020, 2020 + num_years - 1)
+        df['variable'] = dates
+
+        # Drop the rows with NaNs & clean the dates
+        df = df.dropna(axis=0)
+    else:
+        # Reshape the df from wide -> long format & clean the dates
+        df = df.melt()                # First melt the data to reshape it
+        
+    df['variable'] = pd.to_datetime(df['variable'], errors="ignore") # Next make sure dates are in the proper format  
 
     # Create the SQL table
     df.to_sql(name=table_name, con=con, index=False)
@@ -46,6 +61,13 @@ def to_sql_county(df, table_name, con, county_var, var_col_name):
                     RENAME COLUMN 'variable' TO Date""".format(table_name))
     cur.execute("""ALTER TABLE {}
                     RENAME COLUMN 'value' TO {}""".format(table_name, var_col_name))
+
+def generate_1st_of_the_month(base_year, end_year):
+    dates = []
+    for month in range(1, 13):
+        for offset in range(end_year - base_year + 1):
+            dates.append('{}-01-{}'.format(month, end_year - offset))
+    return dates
 
 
 # Time the code from start to end
@@ -116,57 +138,28 @@ business_app_df = business_app_df[business_app_df.series == "BA_BA" ]  # Only co
 business_app_df = business_app_df[business_app_df.year >= 2020 ]       # Only consider business applications starting in 2020
 business_app_df = business_app_df[business_app_df.sa != "U"]           # Drop rows that are not seasonally adjusted
 business_app_df = business_app_df[business_app_df.geo == "TX"]         # Drop rows for states other than Texas
-business_app_df = business_app_df.drop(columns=["sa", "naics_sector", "series", "geo"]) # Drop columns that are unnecessary
+business_app_df = business_app_df.drop(columns=["year", "sa", "naics_sector", "series", "geo"]) # Drop columns that are unnecessary
 
-#print(business_app_df)
-# Convert month abbreviations to numerical codes
-business_app_df = business_app_df.replace({'jan': '1'}, regex=True)
-#print(business_app_df)
+# Add the df to the SQL database
+to_sql_state(business_app_df, "texas_business_apps", con, "BusinessApps", True)
 
-# FIX ME to be part of the same function call for state
-
-business_app_df = business_app_df.stack() # Reshape the dataframe wide -> long
-business_app_df = business_app_df.reset_index(level=0, drop=True) # Drop the row numbers
-business_app_df.dropna(axis=0) # Drop the rows with NaNs
-#print(business_app_df)
-
-#cur.execute("""CREATE TABLE texas_business_apps (
-                #Date DATE PRIMARY KEY, 
-                #BusinessApps INTEGER
-            #)""")  # Create table
-
-# Add business application entries to the table
-#day = 1 # Enter all monthly data on the 1st of the month
-#for i, row in business_app_df.iterrows():
-#    year = row[0]
-    # Loop through the date columns
-    #for month in range(1,12):
-        #d = datetime.date(year, month, day)
-
-        #apps = row[month] # Grab the number of business applications
-
-        # Add entries that are not null to the business apps table
-        #if apps != "NULL":
-            #cur.execute("""INSERT INTO texas_business_apps (Date, BusinessApps) 
-             #               VALUES('{}', {})""".format(d, apps))
-
-#print("Finished State Business Applications Table Initialization")
+print("Finished State Business Applications Table Initialization")
 
 #######################
 ##### STATE TABLE######
 #######################
 
-#cur.execute("""CREATE TABLE state AS
- #               SELECT
-  #                  date(capac.Date),
-   #                 capac.CovidHospOutOfCapacity,
-    #                icu.ICU_Utilization,
-     #               bus.BusinessApps
-      #          FROM
-       #             texas_capacity capac
-        #            LEFT JOIN texas_icu_utilization icu ON capac.Date = icu.Date
-         #           LEFT JOIN texas_business_apps bus ON capac.Date = bus.Date
-          #      """)
+cur.execute("""CREATE TABLE state AS
+                SELECT
+                    date(capac.Date),
+                    capac.CovidHospOutOfCapacity,
+                    icu.ICU_Utilization,
+                    bus.BusinessApps
+                FROM
+                    texas_capacity capac
+                    LEFT JOIN texas_icu_utilization icu ON date(capac.Date) = date(icu.Date)
+                    LEFT JOIN texas_business_apps bus ON date(capac.Date) = date(bus.Date)
+                """)
 
 #######################
 ##### COUNTY LEVEL#####
@@ -242,12 +235,9 @@ con.close()
 
 toc = time.perf_counter()
 print(f"Initialized in {toc - tic:0.4f} seconds")
-# Usually runs in ~ 36 seconds
-
+# Usually runs in ~ 25 seconds
 
 """ Fix list:
-        * Reshape dataframes to eliminate loops
-        * Create functions to call on each dataframe
         * Create a seperate file with all of the hardcoded information
         * Download files using requests
 """
